@@ -8,7 +8,6 @@ using System.Threading;
 using System.Management;
 using System.Security.Principal;
 using System.Reflection;
-using System.Collections.Generic;
 using System.Net;
 
 namespace RDR2_DLSS_Replacer
@@ -244,8 +243,8 @@ namespace RDR2_DLSS_Replacer
                 }
 
                 string source = DLSS_TO_USE;
-                string destination = rdr2Folder + "/" + DLSS_FILE_TO_REPLACE_IN_RDR2_LOCATION;
-                string destinationForBackup = currentFolder + "/" + DLSS_FILE_TO_REPLACE_IN_RDR2_LOCATION  + DLSS_BACKUP_SUFFIX;
+                string destination = rdr2Folder + "\\" + DLSS_FILE_TO_REPLACE_IN_RDR2_LOCATION;
+                string destinationForBackup = currentFolder + "\\" + DLSS_FILE_TO_REPLACE_IN_RDR2_LOCATION  + DLSS_BACKUP_SUFFIX;
 
                 Console.WriteLine("RDR2 Location: {0}\\{1}", rdr2Folder, PROCESS_NAME + ".exe");
 
@@ -262,8 +261,44 @@ namespace RDR2_DLSS_Replacer
                 else if (type == "stopped")
                 {
                     //restore from backup
-                    File.Copy(destinationForBackup, destination, true);
-                    Console.WriteLine("✓ Successfully restored backup DLSS: {0}\n", getDlssVersion(destination));
+                    FileAttributes attributes = File.GetAttributes(destination);
+                    if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                    {
+                        Console.WriteLine("The dlss library has the read-only flag set. Attempting to remove it!");
+                        attributes &= ~FileAttributes.ReadOnly;
+                        File.SetAttributes(destination, attributes);
+                    } else
+                    {
+                        Console.WriteLine("Warning: Could not detect file attributes. Restoring will most likely fail!");
+                    }
+
+                    int tries = 1;
+                    int maxTries = 10;
+                    bool succeeded = false;
+                    while (tries <= maxTries) {
+                        try
+                        {
+                            Console.WriteLine("Attempting to restore DLSS back-up...");
+                            File.Copy(destinationForBackup, destination, true);
+                            succeeded = true;
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("ERROR: Unable to restore file.\n\nException: {0}", ex.ToString());
+                            Console.WriteLine($"Will re-try in 1s (attempt {tries}/{maxTries})...");
+                        }
+                        Thread.Sleep(1000);
+                        tries++;
+                    }
+                    
+                    if (succeeded)
+                    {
+                        Console.WriteLine("✓ Successfully restored backup DLSS: {0}\n", getDlssVersion(destination));
+                    } else
+                    {
+                        Console.WriteLine("ERROR: Unable to copy file.");
+                    }
                 }
             }
             catch (Exception ex)
